@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
@@ -8,8 +9,43 @@ import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark'
 
 const SPLAT_TYPES = ['ply', 'sog', 'splat', 'spz', 'ksplat']
 
+// Copy the WebGL canvas into a downscaled 2D canvas and return a JPEG blob.
+// MUST be called synchronously right after renderer.render() so the drawing
+// buffer still holds the rendered frame (works reliably for splats too).
+function grabThumbnailBlob(renderer) {
+  const source = renderer.domElement
+  const canvas = document.createElement('canvas')
+  canvas.width = 400
+  canvas.height = 225
+  canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height)
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.7))
+}
+
+// Upload the captured blob and store its URL as this asset's thumbnail.
+async function uploadThumbnail(blob, asset) {
+  try {
+    if (!blob) return
+    // Unique path per capture -> always a fresh INSERT (no upsert / UPDATE RLS)
+    const path = `${asset.user_id}/thumb_${asset.id}_${Date.now()}.jpg`
+    const { error: upErr } = await supabase.storage
+      .from('assets')
+      .upload(path, blob, { contentType: 'image/jpeg' })
+    if (upErr) {
+      console.error('Thumbnail upload failed:', upErr)
+      return
+    }
+    const { data: { publicUrl } } = supabase.storage
+      .from('assets')
+      .getPublicUrl(path)
+    await supabase.from('assets').update({ thumbnail_url: publicUrl }).eq('id', asset.id)
+  } catch (err) {
+    console.error('uploadThumbnail error:', err)
+  }
+}
+
 export default function Viewer() {
   const { id } = useParams()
+  const { user } = useAuth()
   const mountRef = useRef(null)
   const [asset, setAsset] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -51,10 +87,22 @@ export default function Viewer() {
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000)
     camera.position.set(0, 1, 3)
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
+    // preserveDrawingBuffer lets us read the canvas for thumbnail capture
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     renderer.setSize(width, height)
     renderer.setPixelRatio(window.devicePixelRatio)
     mount.appendChild(renderer.domElement)
+
+    // Owner-only, one-time thumbnail generation once the scene is drawn.
+    // Splats need extra time to load, sort, and render before capture.
+    // Instead of capturing off-loop, mark a time; the animation loop reads
+    // the canvas in-frame right after render() for a reliable (non-black) shot.
+    let captureAt = 0
+    const maybeCaptureThumbnail = (delay = 800) => {
+      if (user?.id === asset.user_id && !asset.thumbnail_url) {
+        captureAt = performance.now() + delay
+      }
+    }
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -86,6 +134,7 @@ export default function Viewer() {
           model.position.sub(center)
           scene.add(model)
           setSceneLoading(false)
+          maybeCaptureThumbnail()
         },
         undefined,
         (err) => {
@@ -107,7 +156,10 @@ export default function Viewer() {
       scene.add(splatMesh)
 
       splatMesh.initialized
-        .then(() => setSceneLoading(false))
+        .then(() => {
+          setSceneLoading(false)
+          maybeCaptureThumbnail(2500)
+        })
         .catch((err) => {
           console.error('SplatMesh error:', err)
           setError('Failed to load Gaussian Splat')
@@ -124,6 +176,12 @@ export default function Viewer() {
       frameId = requestAnimationFrame(animate)
       controls.update()
       renderer.render(scene, camera)
+
+      // Capture in-frame, immediately after the render, for a valid pixel read
+      if (captureAt && performance.now() >= captureAt) {
+        captureAt = 0
+        grabThumbnailBlob(renderer).then((blob) => uploadThumbnail(blob, asset))
+      }
     }
     animate()
 

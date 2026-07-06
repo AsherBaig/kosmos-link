@@ -44,9 +44,17 @@ export default function Gallery() {
               to={`/viewer/${asset.id}`}
               className="bg-gray-900 border border-gray-800 hover:border-blue-500 rounded-xl p-4 transition group"
             >
-              {/* Thumbnail placeholder */}
-              <div className="aspect-video bg-gray-950 rounded-lg mb-4 flex items-center justify-center border border-gray-800">
-                <span className="text-4xl">🧊</span>
+              {/* Thumbnail */}
+              <div className="aspect-video bg-gray-950 rounded-lg mb-4 flex items-center justify-center border border-gray-800 overflow-hidden">
+                {asset.thumbnail_url ? (
+                  <img
+                    src={asset.thumbnail_url}
+                    alt={asset.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-4xl">🧊</span>
+                )}
               </div>
 
               <div className="flex items-center justify-between mb-2">

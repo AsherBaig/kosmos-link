@@ -67,6 +67,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {assets.map(asset => (
             <div key={asset.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              {/* Thumbnail */}
+              <div className="aspect-video bg-gray-950 rounded-lg mb-3 flex items-center justify-center border border-gray-800 overflow-hidden">
+                {asset.thumbnail_url ? (
+                  <img src={asset.thumbnail_url} alt={asset.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl">🧊</span>
+                )}
+              </div>
+
               {/* File Type Badge */}
               <div className="flex items-center justify-between mb-3">
                 <span className="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded font-medium uppercase">
