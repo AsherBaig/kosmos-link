@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-const ACCEPTED_TYPES = ['.glb', '.ply', '.sog']
+const ACCEPTED_TYPES = ['.glb', '.ply', '.sog', '.splat', '.spz', '.ksplat']
 
 export default function Upload() {
   const { user } = useAuth()
@@ -102,13 +102,13 @@ export default function Upload() {
           ) : (
             <div>
               <p className="text-gray-400">Drag & drop or click to select</p>
-              <p className="text-gray-600 text-sm mt-1">.glb, .ply, .sog files supported</p>
+              <p className="text-gray-600 text-sm mt-1">Models: .glb • Splats: .ply, .sog, .splat, .spz</p>
             </div>
           )}
           <input
             id="fileInput"
             type="file"
-            accept=".glb,.ply,.sog"
+            accept=".glb,.ply,.sog,.splat,.spz,.ksplat"
             onChange={handleFileChange}
             className="hidden"
           />

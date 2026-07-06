@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark'
+
+const SPLAT_TYPES = ['ply', 'sog', 'splat', 'spz', 'ksplat']
 
 export default function Viewer() {
   const { id } = useParams()
@@ -11,6 +14,7 @@ export default function Viewer() {
   const [asset, setAsset] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [sceneLoading, setSceneLoading] = useState(true)
 
   useEffect(() => {
     fetchAsset()
@@ -56,19 +60,22 @@ export default function Viewer() {
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
 
-    // Lighting
+    // Lighting (for GLB models)
     const ambientLight = new THREE.AmbientLight(0xffffff, 1)
     scene.add(ambientLight)
     const dirLight = new THREE.DirectionalLight(0xffffff, 2)
     dirLight.position.set(5, 5, 5)
     scene.add(dirLight)
 
-    // Load GLB
-    if (asset.file_type === 'glb') {
-      const { data: { publicUrl } } = supabase.storage
-        .from('assets')
-        .getPublicUrl(asset.file_path)
+    // Resolve the file's public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('assets')
+      .getPublicUrl(asset.file_path)
 
+    let splatMesh = null
+
+    if (asset.file_type === 'glb') {
+      // ---- 3D model (GLB) ----
       const loader = new GLTFLoader()
       loader.load(
         publicUrl,
@@ -78,15 +85,43 @@ export default function Viewer() {
           const center = box.getCenter(new THREE.Vector3())
           model.position.sub(center)
           scene.add(model)
+          setSceneLoading(false)
         },
         undefined,
-        (err) => console.error('GLTFLoader error:', err)
+        (err) => {
+          console.error('GLTFLoader error:', err)
+          setError('Failed to load 3D model')
+          setSceneLoading(false)
+        }
       )
+    } else if (SPLAT_TYPES.includes(asset.file_type)) {
+      // ---- Gaussian Splat (.ply / .sog / .splat) via SparkJS ----
+      // SparkRenderer is required to draw splats; add it to the scene.
+      const spark = new SparkRenderer({ renderer })
+      scene.add(spark)
+
+      splatMesh = new SplatMesh({ url: publicUrl })
+      // Splats are usually Y-down; rotate 180° around X to view upright
+      splatMesh.quaternion.set(1, 0, 0, 0)
+      splatMesh.position.set(0, 0, 0)
+      scene.add(splatMesh)
+
+      splatMesh.initialized
+        .then(() => setSceneLoading(false))
+        .catch((err) => {
+          console.error('SplatMesh error:', err)
+          setError('Failed to load Gaussian Splat')
+          setSceneLoading(false)
+        })
+    } else {
+      setError('Unsupported file type: ' + asset.file_type)
+      setSceneLoading(false)
     }
 
     // Animation loop
+    let frameId
     const animate = () => {
-      requestAnimationFrame(animate)
+      frameId = requestAnimationFrame(animate)
       controls.update()
       renderer.render(scene, camera)
     }
@@ -103,9 +138,14 @@ export default function Viewer() {
     window.addEventListener('resize', handleResize)
 
     return () => {
+      cancelAnimationFrame(frameId)
       window.removeEventListener('resize', handleResize)
-      mount.removeChild(renderer.domElement)
+      if (splatMesh) splatMesh.dispose?.()
+      controls.dispose()
       renderer.dispose()
+      if (renderer.domElement.parentNode === mount) {
+        mount.removeChild(renderer.domElement)
+      }
     }
   }, [asset])
 
@@ -121,11 +161,14 @@ export default function Viewer() {
         </span>
       </div>
 
-      <div
-        ref={mountRef}
-        className="w-full rounded-xl overflow-hidden"
-        style={{ height: '70vh' }}
-      />
+      <div className="relative w-full rounded-xl overflow-hidden" style={{ height: '70vh' }}>
+        <div ref={mountRef} className="w-full h-full" />
+        {sceneLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-950/60 pointer-events-none">
+            <p className="text-gray-300 text-sm animate-pulse">Loading 3D scene…</p>
+          </div>
+        )}
+      </div>
 
       <p className="text-gray-600 text-xs text-center mt-2">
         Left click to rotate • Scroll to zoom • Right click to pan

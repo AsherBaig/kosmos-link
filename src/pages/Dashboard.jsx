@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { formatSize } from '../lib/format'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -30,7 +31,15 @@ export default function Dashboard() {
   }
 
   const handleTogglePublic = async (id, currentValue) => {
-    await supabase.from('assets').update({ is_public: !currentValue }).eq('id', id)
+    const { error } = await supabase
+      .from('assets')
+      .update({ is_public: !currentValue })
+      .eq('id', id)
+
+    if (error) {
+      alert('Could not update: ' + error.message)
+      return
+    }
     setAssets(assets.map(a => a.id === id ? { ...a, is_public: !currentValue } : a))
   }
 
@@ -71,7 +80,7 @@ export default function Dashboard() {
               {/* Name */}
               <h3 className="text-white font-medium mb-1">{asset.name}</h3>
               <p className="text-gray-500 text-xs mb-4">
-                {(asset.size / 1024 / 1024).toFixed(2)} MB • {new Date(asset.created_at).toLocaleDateString()}
+                {formatSize(asset.size)} • {new Date(asset.created_at).toLocaleDateString()}
               </p>
 
               {/* Actions */}
