@@ -68,6 +68,7 @@ export default function Viewer() {
   const markerRadiusRef = useRef(0.05)   // pin size, scaled to the model
   const annotateModeRef = useRef(false)
   const annotationsRef = useRef([])
+  const screenshotReqRef = useRef(false) // set by button, handled in render loop
 
   // Keep refs in sync so the (long-lived) click handler reads current values
   useEffect(() => { annotateModeRef.current = annotateMode }, [annotateMode])
@@ -280,6 +281,22 @@ export default function Viewer() {
         captureAt = 0
         grabThumbnailBlob(renderer).then((blob) => uploadThumbnail(blob, asset))
       }
+
+      // Full-resolution screenshot download, captured in-frame after render
+      if (screenshotReqRef.current) {
+        screenshotReqRef.current = false
+        renderer.domElement.toBlob((blob) => {
+          if (!blob) return
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `${asset.name}-screenshot.png`
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          URL.revokeObjectURL(url)
+        }, 'image/png')
+      }
     }
     animate()
 
@@ -338,6 +355,12 @@ export default function Viewer() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-white">{asset?.name}</h1>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => { screenshotReqRef.current = true }}
+            className="bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm px-4 py-2 rounded-lg transition"
+          >
+            📷 Screenshot
+          </button>
           <button
             onClick={() => downloadAsset(asset)}
             className="bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm px-4 py-2 rounded-lg transition"
