@@ -10,6 +10,7 @@ export default function Upload() {
   const navigate = useNavigate()
   const [file, setFile] = useState(null)
   const [name, setName] = useState('')
+  const [tags, setTags] = useState('')
   const [isPublic, setIsPublic] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -56,6 +57,12 @@ export default function Upload() {
       return
     }
 
+    // Parse comma-separated tags into a clean, lowercased array
+    const tagList = tags
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+
     // Save metadata to database
     const { error: dbError } = await supabase
       .from('assets')
@@ -66,6 +73,7 @@ export default function Upload() {
         file_type: ext,
         size: file.size,
         is_public: isPublic,
+        tags: tagList,
       })
 
     if (dbError) {
@@ -125,6 +133,19 @@ export default function Upload() {
             placeholder="Enter a name for this scan"
             className="w-full bg-gray-800 text-white px-4 py-3 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500"
           />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="text-gray-400 text-sm mb-2 block">Tags</label>
+          <input
+            type="text"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="e.g. building, historical, detmold"
+            className="w-full bg-gray-800 text-white px-4 py-3 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500"
+          />
+          <p className="text-gray-600 text-xs mt-1">Separate tags with commas</p>
         </div>
 
         {/* Public Toggle */}
