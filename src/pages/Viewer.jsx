@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Comments from '../components/Comments'
+import { downloadAsset } from '../lib/download'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
@@ -336,9 +337,17 @@ export default function Viewer() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-white">{asset?.name}</h1>
-        <span className="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded uppercase font-medium">
-          {asset?.file_type}
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => downloadAsset(asset)}
+            className="bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm px-4 py-2 rounded-lg transition"
+          >
+            ⬇ Download
+          </button>
+          <span className="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded uppercase font-medium">
+            {asset?.file_type}
+          </span>
+        </div>
       </div>
 
       {/* Annotate toolbar (GLB + Splat) */}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { formatSize } from '../lib/format'
+import { downloadAsset } from '../lib/download'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -100,6 +101,12 @@ export default function Dashboard() {
                 >
                   Open Viewer
                 </Link>
+                <button
+                  onClick={() => downloadAsset(asset)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded-lg transition text-sm"
+                >
+                  ⬇ Download
+                </button>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
