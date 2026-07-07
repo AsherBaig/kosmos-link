@@ -83,4 +83,4 @@ The vision behind KOSMOS-Link: a department captures a real-world subject (for e
 
 ---
 
-*Developed as a research project (30 CP) at TH OWL.*
+*Developing as a research project (30 CP) at TH OWL.*
