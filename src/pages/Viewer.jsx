@@ -7,6 +7,7 @@ import { downloadAsset } from '../lib/download'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+import { VRButton } from 'three/examples/jsm/webxr/VRButton'
 import { SplatMesh, SparkRenderer } from '@sparkjsdev/spark'
 
 const SPLAT_TYPES = ['ply', 'sog', 'splat', 'spz', 'ksplat']
@@ -150,7 +151,16 @@ export default function Viewer() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     renderer.setSize(width, height)
     renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.xr.enabled = true // WebXR / VR support
     mount.appendChild(renderer.domElement)
+
+    // "Enter VR" button (shows "VR NOT SUPPORTED" without a headset/WebXR)
+    const vrButton = VRButton.createButton(renderer)
+    vrButton.style.position = 'absolute'
+    vrButton.style.bottom = '16px'
+    vrButton.style.left = '50%'
+    vrButton.style.transform = 'translateX(-50%)'
+    mount.appendChild(vrButton)
 
     // Group that holds all annotation pins
     const markerGroup = new THREE.Group()
@@ -272,9 +282,8 @@ export default function Viewer() {
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointerup', onPointerUp)
 
-    let frameId
+    // setAnimationLoop (not requestAnimationFrame) is required for WebXR
     const animate = () => {
-      frameId = requestAnimationFrame(animate)
       controls.update()
       renderer.render(scene, camera)
       if (captureAt && performance.now() >= captureAt) {
@@ -298,7 +307,7 @@ export default function Viewer() {
         }, 'image/png')
       }
     }
-    animate()
+    renderer.setAnimationLoop(animate)
 
     const handleResize = () => {
       const w = mount.clientWidth
@@ -310,7 +319,7 @@ export default function Viewer() {
     window.addEventListener('resize', handleResize)
 
     return () => {
-      cancelAnimationFrame(frameId)
+      renderer.setAnimationLoop(null)
       window.removeEventListener('resize', handleResize)
       renderer.domElement.removeEventListener('pointerdown', onPointerDown)
       renderer.domElement.removeEventListener('pointerup', onPointerUp)
@@ -320,6 +329,7 @@ export default function Viewer() {
       modelRef.current = null
       splatRef.current = null
       markerGroupRef.current = null
+      if (vrButton.parentNode === mount) mount.removeChild(vrButton)
       if (renderer.domElement.parentNode === mount) {
         mount.removeChild(renderer.domElement)
       }
