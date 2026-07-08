@@ -62,6 +62,10 @@ export default function Viewer() {
   const [pendingText, setPendingText] = useState('')
   const [selected, setSelected] = useState(null) // annotation clicked to view
 
+  // Video flythrough
+  const [waypointCount, setWaypointCount] = useState(0)
+  const [flyStatus, setFlyStatus] = useState('') // '', 'playing', 'recording'
+
   // THREE refs shared between the render effect and click handling
   const modelRef = useRef(null)          // raycast target (GLB model)
   const splatRef = useRef(null)          // raycast target (Gaussian splat)
@@ -70,6 +74,13 @@ export default function Viewer() {
   const annotateModeRef = useRef(false)
   const annotationsRef = useRef([])
   const screenshotReqRef = useRef(false) // set by button, handled in render loop
+
+  // Flythrough refs
+  const cameraRef = useRef(null)
+  const controlsRef = useRef(null)
+  const rendererRef = useRef(null)
+  const waypointsRef = useRef([])        // [{ pos: Vector3, target: Vector3 }]
+  const playRef = useRef(null)           // active playback state
 
   // Keep refs in sync so the (long-lived) click handler reads current values
   useEffect(() => { annotateModeRef.current = annotateMode }, [annotateMode])
@@ -134,6 +145,66 @@ export default function Viewer() {
     setSelected(null)
   }
 
+  // --- Video flythrough ---
+  const addWaypoint = () => {
+    const cam = cameraRef.current, ctr = controlsRef.current
+    if (!cam || !ctr) return
+    waypointsRef.current.push({ pos: cam.position.clone(), target: ctr.target.clone() })
+    setWaypointCount(waypointsRef.current.length)
+  }
+
+  const clearWaypoints = () => {
+    waypointsRef.current = []
+    setWaypointCount(0)
+  }
+
+  const playFlythrough = (record = false) => {
+    const wps = waypointsRef.current
+    if (wps.length < 2 || playRef.current) return
+    const controls = controlsRef.current
+
+    // Smooth spline through the captured camera positions and look-at targets
+    const posCurve = new THREE.CatmullRomCurve3(wps.map((w) => w.pos))
+    const targetCurve = new THREE.CatmullRomCurve3(wps.map((w) => w.target))
+    const duration = Math.max(wps.length * 2000, 4000) // ~2s per waypoint
+    controls.enabled = false
+
+    let recorder = null
+    if (record) {
+      const stream = rendererRef.current.domElement.captureStream(30)
+      const chunks = []
+      recorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+      recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${asset.name}-flythrough.webm`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+      }
+      recorder.start()
+      setFlyStatus('recording')
+    } else {
+      setFlyStatus('playing')
+    }
+
+    playRef.current = {
+      start: performance.now(),
+      duration,
+      posCurve,
+      targetCurve,
+      onDone: () => {
+        controls.enabled = true
+        if (recorder && recorder.state !== 'inactive') recorder.stop()
+        setFlyStatus('')
+      },
+    }
+  }
+
   // --- Scene setup (runs when the asset is loaded) ---
   useEffect(() => {
     if (!asset || !mountRef.current) return
@@ -176,6 +247,11 @@ export default function Viewer() {
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
+
+    // Expose to flythrough handlers
+    cameraRef.current = camera
+    controlsRef.current = controls
+    rendererRef.current = renderer
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 1)
     scene.add(ambientLight)
@@ -284,6 +360,16 @@ export default function Viewer() {
 
     // setAnimationLoop (not requestAnimationFrame) is required for WebXR
     const animate = () => {
+      // Flythrough playback: move camera along the waypoint spline
+      const play = playRef.current
+      if (play) {
+        const t = Math.min((performance.now() - play.start) / play.duration, 1)
+        const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2 // easeInOut
+        camera.position.copy(play.posCurve.getPoint(ease))
+        controls.target.copy(play.targetCurve.getPoint(ease))
+        if (t >= 1) { const done = play.onDone; playRef.current = null; done?.() }
+      }
+
       controls.update()
       renderer.render(scene, camera)
       if (captureAt && performance.now() >= captureAt) {
@@ -399,6 +485,45 @@ export default function Viewer() {
           )}
         </div>
       )}
+
+      {/* Flythrough toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className="text-gray-400 text-sm mr-1">🎥 Flythrough:</span>
+        <button
+          onClick={addWaypoint}
+          disabled={flyStatus !== ''}
+          className="text-sm px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-200"
+        >
+          + Add Waypoint
+        </button>
+        <span className="text-gray-500 text-sm">{waypointCount} point(s)</span>
+        <button
+          onClick={() => playFlythrough(false)}
+          disabled={waypointCount < 2 || flyStatus !== ''}
+          className="text-sm px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white"
+        >
+          ▶ Play
+        </button>
+        <button
+          onClick={() => playFlythrough(true)}
+          disabled={waypointCount < 2 || flyStatus !== ''}
+          className="text-sm px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white"
+        >
+          ● Record
+        </button>
+        <button
+          onClick={clearWaypoints}
+          disabled={waypointCount === 0 || flyStatus !== ''}
+          className="text-sm px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-400"
+        >
+          Clear
+        </button>
+        {flyStatus && (
+          <span className="text-sm text-amber-400 animate-pulse">
+            {flyStatus === 'recording' ? '● Recording…' : '▶ Playing…'}
+          </span>
+        )}
+      </div>
 
       <div className="relative w-full rounded-xl overflow-hidden" style={{ height: '70vh' }}>
         <div ref={mountRef} className="w-full h-full" />
