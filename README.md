@@ -46,10 +46,10 @@ Gaussian Splats and GLB models are rendered together in a single Three.js scene.
 5. ✅ Scan gallery / dashboard with tagging
 
 ### Additional features built
-Comments · downloadable scans · viewport screenshots · auto-generated thumbnails · **combine & arrange multiple scans in one scene (save/load)** · **WebXR / VR support**
+Comments · downloadable scans · viewport screenshots · auto-generated thumbnails · **combine & arrange multiple scans in one scene (save/load)** · **WebXR / VR support** · **waypoint-based video flythrough (record & download)**
 
 ### Planned / future work
-Video flythroughs · AI renders from the viewport · university (institutional) SSO login.
+AI renders from the viewport (KIO API) · university (institutional) SSO login.
 
 ---
 
