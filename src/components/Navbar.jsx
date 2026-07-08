@@ -22,6 +22,7 @@ export default function Navbar() {
             <>
               <Link to="/upload" className="text-gray-400 hover:text-white transition">Upload</Link>
               <Link to="/dashboard" className="text-gray-400 hover:text-white transition">Dashboard</Link>
+              <Link to="/compose" className="text-gray-400 hover:text-white transition">Compose</Link>
             </>
           )}
           {user ? (

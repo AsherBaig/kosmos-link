@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Upload from './pages/Upload'
 import Gallery from './pages/Gallery'
 import Viewer from './pages/Viewer'
+import Compose from './pages/Compose'
 
 function App() {
   return (
@@ -23,6 +24,11 @@ function App() {
         <Route path="dashboard" element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="compose" element={
+          <ProtectedRoute>
+            <Compose />
           </ProtectedRoute>
         } />
       </Route>
